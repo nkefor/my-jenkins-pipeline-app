@@ -1,0 +1,64 @@
+---
+- name: Configure Nginx Web Servers on EC2
+  hosts: ec2_webservers
+  become: yes # Run tasks with sudo privileges
+
+  tasks:
+    - name: Update apt cache (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600 # Cache valid for 1 hour
+      when: ansible_os_family == "Debian"
+
+    - name: Install Nginx (Debian/Ubuntu)
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Update yum cache (CentOS/RHEL/Amazon Linux)
+      ansible.builtin.yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install Nginx (CentOS/RHEL/Amazon Linux)
+      ansible.builtin.yum:
+        name: nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure Nginx service is running and enabled
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Deploy custom index.html
+      ansible.builtin.copy:
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Welcome to Nginx on EC2!</title>
+              <style>
+                  body { font-family: Arial, sans-serif; background-color: #f0f0f0; text-align: center; padding-top: 50px; }
+                  h1 { color: #333; }
+                  p { color: #666; }
+              </style>
+          </head>
+          <body>
+              <h1>Hello from EC2 Web Server!</h1>
+              <p>This page was deployed and configured by Ansible.</p>
+              <p>Instance IP: {{ ansible_default_ipv4.address }}</p>
+              <p>Hostname: {{ ansible_hostname }}</p>
+          </body>
+          </html>
+        dest: /var/www/html/index.html # Default Nginx web root for Debian/Ubuntu
+        mode: '0644'
+      notify: Restart Nginx
+
+  handlers:
+    - name: Restart Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
