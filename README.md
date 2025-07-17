@@ -1,142 +1,94 @@
-# CI/CD Pipeline: Train Schedule Application
+# AWS CloudWatch Monitoring and Alerting Script
 
-This project outlines a comprehensive CI/CD pipeline for a Python-based train schedule application, integrating leading DevOps tools to automate the entire software delivery process, from code commit to deployment on Kubernetes, with integrated monitoring and alerting using Splunk.
+This Python script automates the setup of CloudWatch Alarms for common AWS services (EC2, Application Load Balancer, RDS) and configures Amazon SNS for sending alerts. It provides a foundational approach to monitoring the health and performance of your cloud-based applications on AWS.
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Architecture Overview](#architecture-overview)
-- [Key Components and Tools](#key-components-and-tools)
-- [Project Files](#project-files)
-  - [Python Application Files](#python-application-files)
-  - [Kubernetes Manifests](#kubernetes-manifests)
-  - [Ansible Playbook](#ansible-playbook)
-  - [Jenkinsfile](#jenkinsfile)
-- [Setup and Configuration Steps](#setup-and-configuration-steps)
-- [Monitoring and Alerting with Splunk](#monitoring-and-alerting-with-splunk)
+- [How it Works](#how-it-works)
+- [Prerequisites](#prerequisites)
+- [Script Usage](#script-usage)
+- [What the Script Does](#what-the-script-does)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Overview
 
-This pipeline automates the process of:
+Effective monitoring is crucial for maintaining the reliability and performance of cloud applications. This script simplifies the process of creating essential CloudWatch alarms that trigger notifications via SNS when predefined metric thresholds are breached. This allows for proactive identification and resolution of potential issues.
 
-*   **Application Development:** A simple Python Flask application.
-*   **Containerization:** Packaging the application into Docker images.
-*   **Continuous Integration:** Building, testing, and pushing Docker images using Jenkins.
-*   **Continuous Deployment:** Deploying the application to a Kubernetes cluster using Ansible.
-*   **Monitoring & Alerting:** Centralized logging and operational intelligence with Splunk.
+## How it Works
 
-## Architecture Overview
+The script leverages the `boto3` AWS SDK for Python to interact with AWS services. It performs the following actions:
 
-```
-+---------------------+     +-------------------+     +-------------------+
-| Python Application  |     | Jenkins CI/CD     |     | Container Registry|
-| Code Repository     |     | (Orchestrator)    |     | (Docker Images)   |
-| (e.g., GitHub)      |     |                   |     |                   |
-+----------+----------+     +---------+---------+     +---------+---------+
-           |                          |                           ^
-           | (Code Push)              | (Image Push)              |
-           v                          |                           |
-+----------+----------+               |                           |
-| Webhook/Polling     |               |                           |
-+----------+----------+               |                           |
-           |                          |                           |
-           | (Trigger)                |                           |
-           v                          |                           |
-+-----------------------------------------------------------------------+
-|                                                                       |
-|  Jenkins Pipeline (Jenkinsfile)                                       |
-|  - Stage 1: Build (Docker Image)                                      |
-|  - Stage 2: Test (Python Unit Tests)                                  |
-|  - Stage 3: Push (Docker Image to Registry)                           |
-|  - Stage 4: Deploy (Ansible to Kubernetes)                            |
-|                                                                       |
-+-----------------------------------------------------------------------+
-           |
-           | (Ansible Playbook Execution)
-           v
-+---------------------+
-| Kubernetes Cluster  |
-| (Runs Containerized |
-| Application)        |
-+---------------------+
-           |
-           | (Logs/Metrics)
-           v
-+---------------------+
-| Splunk              |
-| (Monitoring &       |
-| Alerting)           |
-+---------------------+
+1.  **SNS Topic Creation:** Creates a new Amazon SNS topic to serve as the notification channel for alarms.
+2.  **Email Subscription:** Subscribes a specified email address to the newly created SNS topic.
+3.  **CloudWatch Alarm Configuration:** For each specified AWS resource (EC2 instances, ALBs, RDS instances), it creates a set of predefined CloudWatch alarms based on critical health metrics.
+4.  **Alerting:** When an alarm's metric crosses its threshold, CloudWatch sends a notification to the SNS topic, which then delivers an email alert to the subscribed address.
+
+## Prerequisites
+
+1.  **AWS Account:** You need an active AWS account.
+2.  **AWS CLI Configured:** Install the [AWS CLI](https://aws.amazon.com/cli/) and configure it with your credentials by running `aws configure`. Ensure your AWS credentials have sufficient permissions to create SNS topics and CloudWatch alarms (e.g., `sns:Publish`, `sns:Subscribe`, `sns:CreateTopic`, `cloudwatch:PutMetricAlarm`).
+3.  **`boto3`:** Install the AWS SDK for Python.
+    ```bash
+    pip install boto3
+    ```
+
+## Script Usage
+
+Open your terminal in the directory where `aws_cloudwatch_monitor.py` is located and run the script with the required arguments.
+
+**Basic Usage (EC2 CPU Monitoring):**
+
+```bash
+python aws_cloudwatch_monitor.py --region us-east-1 --email your-email@example.com --ec2-instance-ids i-0abcdef1234567890
 ```
 
-## Key Components and Tools
+**Monitoring Multiple Services:**
 
-*   **Python Application:** A simple Flask application simulating a train schedule service.
-*   **Docker:** Containerizes the Python application for consistent deployment.
-*   **Jenkins:** The central CI/CD orchestrator. It defines the pipeline stages, automates builds, tests, image pushes, and triggers Ansible for deployment.
-*   **Ansible:** Used for declarative deployment to Kubernetes. It applies Kubernetes manifests to the cluster.
-*   **Kubernetes:** The container orchestration platform where the application will run.
-*   **Splunk:** For centralized log management, monitoring, and alerting on application and infrastructure health.
-*   **Container Registry:** (e.g., Docker Hub, ECR, GCR) to store Docker images.
+```bash
+python aws_cloudwatch_monitor.py \
+  --region us-east-1 \
+  --email your-email@example.com \
+  --ec2-instance-ids i-0abcdef1234567890 i-0fedcba9876543210 \
+  --alb-arns arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/abcdef1234567890 \
+  --rds-instance-ids my-prod-db my-dev-db
+```
 
-## Project Files
+**Explanation of Arguments:**
 
-### Python Application Files
+*   `--region`: Your AWS region (e.g., `us-east-1`). **Required.**
+*   `--email`: The email address where you want to receive SNS notifications. **Required.** You must confirm the subscription in your email inbox after running the script.
+*   `--sns-topic-name`: (Optional) A custom name for the SNS topic (default: `ApplicationHealthAlerts`).
+*   `--ec2-instance-ids`: (Optional) Space-separated list of EC2 instance IDs to monitor.
+*   `--alb-arns`: (Optional) Space-separated list of Application Load Balancer ARNs to monitor.
+*   `--rds-instance-ids`: (Optional) Space-separated list of RDS DB instance identifiers to monitor.
 
-*   **`app.py`**: A simple Flask application that provides a train schedule API.
-*   **`requirements.txt`**: Lists Python dependencies (`Flask`).
-*   **`Dockerfile`**: Defines how to build the Docker image for the Python application.
+## What the Script Does
 
-### Kubernetes Manifests
+### SNS Topic Creation
 
-*   **`k8s-deployment.yml`**: Kubernetes Deployment and Service definitions for the train schedule application. The image tag will be dynamically replaced by Jenkins.
+*   Creates an SNS topic named `ApplicationHealthAlerts` (or custom name).
+*   Subscribes the provided email address to this topic. **Confirmation via email is required.**
 
-### Ansible Playbook
+### CloudWatch Alarms Created
 
-*   **`ansible-deploy-k8s.yml`**: An Ansible playbook executed by Jenkins to apply the Kubernetes manifests to the cluster using `kubectl`.
+**For EC2 Instances:**
 
-### Jenkinsfile
+*   **High CPU Utilization:** `EC2-CPU-High-<InstanceId>` (Threshold: >=80% for 10 minutes)
+*   **Instance Status Check Failed:** `EC2-StatusCheckFailed-Instance-<InstanceId>` (Threshold: >=1 for 5 minutes)
+*   **System Status Check Failed:** `EC2-StatusCheckFailed-System-<InstanceId>` (Threshold: >=1 for 5 minutes)
 
-*   **`Jenkinsfile`**: Defines the CI/CD pipeline stages in Groovy syntax, orchestrating the entire workflow.
+**For Application Load Balancers (ALB):**
 
-## Setup and Configuration Steps
+*   **HTTP 5xx Errors:** `ALB-HTTP-5XX-High-<ALB_Name>` (Threshold: >=1 error in 5 minutes)
+*   **Low Healthy Host Count:** `ALB-HealthyHost-Low-<ALB_Name>` (Threshold: <1 healthy host in 5 minutes)
 
-1.  **Prerequisites:**
-    *   **Kubernetes Cluster:** A running Kubernetes cluster.
-    *   **Jenkins Server:** A running Jenkins instance with Docker, Python, and Ansible installed on the agent that will run this pipeline.
-    *   **`kubectl`:** Configured on the Jenkins agent with access to your Kubernetes cluster. The `kubeconfig` file should be placed at the path specified in `Jenkinsfile` (`/var/jenkins_home/.kube/config` or similar).
-    *   **Container Registry Account:** (e.g., Docker Hub).
-    *   **Splunk Instance:** A running Splunk instance with HTTP Event Collector (HEC) enabled if you plan to use the Splunk logging.
+**For RDS DB Instances:**
 
-2.  **Update Placeholders:**
-    *   **`Jenkinsfile`:**
-        *   `DOCKER_REGISTRY`: Replace `"your-docker-registry"` with your actual Docker registry (e.g., `"docker.io/your-username"`).
-        *   `KUBECONFIG_PATH`: Ensure this path is correct for your Jenkins agent.
-        *   **Splunk HEC (in `post` section):** Uncomment and replace `your-splunk-hec-endpoint` and `<token>` with your Splunk HEC details if you want to send deployment logs to Splunk.
-    *   **`k8s-deployment.yml`:** The `image` placeholder will be replaced by Jenkins during the deployment stage.
-
-3.  **Jenkins Credentials (if using private registry):**
-    *   If your Docker registry is private, you'll need to configure Jenkins credentials (Type: "Username with password") with your Docker registry username and password. Update the `credentialsId` in the `Jenkinsfile`'s "Push Docker Image" stage.
-
-4.  **Jenkins Job Configuration:**
-    *   Create a new Jenkins Pipeline job.
-    *   Configure it to pull from your Git repository (where these files will be pushed).
-    *   Set the "Definition" to "Pipeline script from SCM" and point to the `Jenkinsfile`.
-
-## Monitoring and Alerting with Splunk
-
-*   **Log Collection:**
-    *   Configure your Kubernetes cluster to send container logs to Splunk. This can be done using a Splunk Universal Forwarder deployed as a DaemonSet in Kubernetes, or by using a logging agent like Fluentd/Fluent Bit that forwards logs to Splunk HEC.
-*   **Metrics Collection:**
-    *   Use Splunk Connect for Kubernetes or a Universal Forwarder to collect Kubernetes metrics (e.g., from cAdvisor, Kube-state-metrics) and send them to Splunk.
-*   **Alerting:**
-    *   In Splunk, create searches and alerts based on:
-        *   **Application Logs:** Errors, exceptions, specific messages from your Python app.
-        *   **Kubernetes Events:** Pod crashes, deployment failures, OOMKills.
-        *   **Performance Metrics:** High CPU/memory usage, low disk space on nodes.
-        *   **Deployment Status:** Use the HEC events sent by Jenkins (as commented in `Jenkinsfile`) to alert on successful or failed deployments.
+*   **High CPU Utilization:** `RDS-CPU-High-<DBInstanceIdentifier>` (Threshold: >=70% for 10 minutes)
+*   **Low Freeable Memory:** `RDS-FreeableMemory-Low-<DBInstanceIdentifier>` (Threshold: <100MB for 10 minutes)
+*   **High Database Connections:** `RDS-DBConnections-High-<DBInstanceIdentifier>` (Threshold: >=80 connections for 10 minutes)
 
 ## Contributing
 
