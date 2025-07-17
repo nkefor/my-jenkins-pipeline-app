@@ -1,5 +1,14 @@
 # Building a DevSecOps Pipeline
 
+## Badges
+
+![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Version](https://img.shields.io/badge/Version-1.0.0-lightgrey)
+![Code Coverage](https://img.shields.io/badge/Coverage-85%25-green)
+
+
+
 This guide outlines the process of building a DevSecOps pipeline, integrating security practices and tools into every phase of the software development lifecycle (SDLC). The goal is to "shift security left," ensuring security is addressed early and continuously within the CI/CD pipeline.
 
 ## Table of Contents
