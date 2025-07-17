@@ -1,0 +1,97 @@
+---
+- name: Automated Patch Management and Software Updates
+  hosts: linux_servers
+  become: yes # Run tasks with sudo privileges
+
+  vars:
+    reboot_required_file: /var/run/reboot-required # Standard file for Debian/Ubuntu
+    reboot_marker_file: /tmp/ansible_reboot_marker # Custom marker for Ansible
+
+  tasks:
+    - name: Update apt cache (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600 # Cache valid for 1 hour
+      when: ansible_os_family == "Debian"
+
+    - name: Upgrade all packages (Debian/Ubuntu)
+      ansible.builtin.apt:
+        upgrade: dist
+      when: ansible_os_family == "Debian"
+
+    - name: Update yum cache (CentOS/RHEL)
+      ansible.builtin.yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Upgrade all packages (CentOS/RHEL)
+      ansible.builtin.yum:
+        name: "*"
+        state: latest
+      when: ansible_os_family == "RedHat"
+
+    - name: Clean up unused packages (Debian/Ubuntu)
+      ansible.builtin.apt:
+        autoremove: yes
+        autoclean: yes
+      when: ansible_os_family == "Debian"
+
+    - name: Check if reboot is required (Debian/Ubuntu)
+      ansible.builtin.stat:
+        path: "{{ reboot_required_file }}"
+      register: reboot_required_check_debian
+      when: ansible_os_family == "Debian"
+
+    - name: Check if reboot is required (CentOS/RHEL - using needs-restarting)
+      ansible.builtin.command: needs-restarting -r
+      register: reboot_required_check_rhel
+      changed_when: false # This command doesn't change system state
+      failed_when: reboot_required_check_rhel.rc not in [0, 1] # 0=no reboot, 1=reboot needed
+      when: ansible_os_family == "RedHat"
+
+    - name: Create reboot marker file if reboot is required (Debian/Ubuntu)
+      ansible.builtin.file:
+        path: "{{ reboot_marker_file }}"
+        state: touch
+      when:
+        - ansible_os_family == "Debian"
+        - reboot_required_check_debian.stat.exists
+
+    - name: Create reboot marker file if reboot is required (CentOS/RHEL)
+      ansible.builtin.file:
+        path: "{{ reboot_marker_file }}"
+        state: touch
+      when:
+        - ansible_os_family == "RedHat"
+        - reboot_required_check_rhel.rc == 1 # needs-restarting returns 1 if reboot is needed
+
+  handlers:
+    - name: Perform reboot if marker file exists
+      ansible.builtin.reboot:
+        reboot_timeout: 600 # Wait up to 10 minutes for reboot
+      when:
+        - ansible.builtin.stat(path=reboot_marker_file).stat.exists
+      # This handler will only run if explicitly notified or if the playbook finishes
+      # and the marker file exists. For a full reboot strategy, you might
+      # want to run this as a separate play or use a more sophisticated approach.
+
+- name: Trigger Reboot if necessary
+  hosts: linux_servers
+  become: yes
+  tasks:
+    - name: Check for reboot marker file
+      ansible.builtin.stat:
+        path: "{{ hostvars[inventory_hostname].reboot_marker_file }}"
+      register: final_reboot_check
+
+    - name: Perform reboot if marker file exists and remove it
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+      when: final_reboot_check.stat.exists
+      notify: Remove reboot marker file
+
+  handlers:
+    - name: Remove reboot marker file
+      ansible.builtin.file:
+        path: "{{ hostvars[inventory_hostname].reboot_marker_file }}"
+        state: absent
