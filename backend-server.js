@@ -34,9 +34,9 @@ app.get('/', (req, res) => {
   res.send('Compliance Tracker Backend API');
 });
 
-// Import Routes (will be added later)
-// const complianceRoutes = require('./routes/compliance.routes');
-// app.use('/api/compliance', complianceRoutes);
+// Import Routes
+const complianceRoutes = require('./routes/compliance.routes');
+app.use('/api/compliance', complianceRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

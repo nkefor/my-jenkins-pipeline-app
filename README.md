@@ -11,6 +11,7 @@ This is a web application designed to help organizations track and manage their 
   - [Prerequisites](#prerequisites)
   - [Backend Setup](#backend-setup)
   - [Frontend Setup (Coming Soon)](#frontend-setup-coming-soon)
+- [API Endpoints](#api-endpoints)
 - [Usage](#usage)
 - [Contributing](#contributing)
 - [License](#license)
@@ -37,7 +38,10 @@ compliance-tracker/
 │   ├── backend-package.json  # Backend dependencies
 │   ├── .env.example          # Environment variables template
 │   ├── firebase-admin-sdk.json # Firebase Service Account Key (PLACEHOLDER - DO NOT COMMIT)
-│   └── ... (routes, models, controllers will be added here)
+│   ├── models/               # MongoDB Mongoose Schemas
+│   │   └── ComplianceRequirement.js # Schema for compliance requirements
+│   └── routes/               # API Endpoints
+│       └── compliance.routes.js # Routes for compliance requirements
 ├── frontend/                 # Angular Frontend (Coming Soon)
 │   └── ...
 ├── README.md                 # Project documentation
@@ -83,6 +87,16 @@ compliance-tracker/
 ### Frontend Setup (Coming Soon)
 
 Instructions for setting up the Angular frontend will be provided in a future update.
+
+## API Endpoints
+
+The following API endpoints are available for managing compliance requirements:
+
+*   **`GET /api/compliance`**: Get all compliance requirements.
+*   **`GET /api/compliance/:id`**: Get a single compliance requirement by ID.
+*   **`POST /api/compliance`**: Create a new compliance requirement.
+*   **`PATCH /api/compliance/:id`**: Update an existing compliance requirement by ID.
+*   **`DELETE /api/compliance/:id`**: Delete a compliance requirement by ID.
 
 ## Usage
 
