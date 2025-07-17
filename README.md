@@ -1,208 +1,174 @@
-# Node.js CI/CD Pipeline with Ansible
+# Server Health and Uptime Monitoring with Prometheus and Grafana
 
-This project demonstrates a Continuous Integration/Continuous Deployment (CI/CD) pipeline for a Node.js application using Ansible for automated deployment.
+This project outlines the setup of a robust monitoring system using Prometheus for metric collection and Grafana for powerful data visualization. This system is designed to track server health, uptime, and various performance metrics, providing insights into your infrastructure's operational status.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Prerequisites](#prerequisites)
-- [Project Files](#project-files)
-  - [hosts.ini](#hostsini)
-  - [deploy_app.yml](#deploy_appyml)
-- [CI/CD Workflow](#ci/cd-workflow)
-- [How to Use (Manual Test)](#how-to-use-manual-test)
-- [Integration with CI Server (e.g., Jenkins)](#integration-with-ci-server-e.g.-jenkins)
+- [Step-by-Step Configuration](#step-by-step-configuration)
+  - [Step 1: Set up Prometheus Server](#step-1-set-up-prometheus-server)
+  - [Step 2: Install Node Exporter on Target Servers](#step-2-install-node-exporter-on-target-servers)
+  - [Step 3: Set up Grafana](#step-3-set-up-grafana)
+  - [Step 4: Configure Grafana Data Source](#step-4-configure-grafana-data-source)
+  - [Step 5: Import a Grafana Dashboard](#step-5-import-a-grafana-dashboard)
+- [Scaling and Advanced Features](#scaling-and-advanced-features)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Overview
 
-This setup provides a robust and automated way to deploy a Node.js application. While a CI server (like Jenkins, GitLab CI, or GitHub Actions) handles the integration aspects (building, testing), Ansible takes over for the continuous deployment, ensuring the application is consistently deployed and managed on target servers.
+This monitoring solution provides real-time insights into the performance and availability of your servers. By collecting metrics from various sources and visualizing them in customizable dashboards, you can proactively identify issues, optimize resource utilization, and ensure the continuous health of your infrastructure.
 
 ## Architecture
 
-1.  **Source Code Repository:** Your Node.js application code (e.g., GitHub).
-2.  **CI Server (e.g., Jenkins):**
-    *   Pulls the latest code.
-    *   Installs Node.js dependencies.
-    *   Runs tests.
-    *   **Triggers Ansible Playbook** for deployment.
-3.  **Ansible Control Node:** (Can be the CI server itself, or a dedicated machine).
-    *   Contains Ansible playbooks and inventory.
-    *   Connects to target deployment servers via SSH.
-4.  **Target Deployment Servers:**
-    *   Where your Node.js application will run.
-    *   Ansible will configure these servers and deploy the application.
+*   **Node Exporter:** A lightweight agent installed on each server to be monitored. It exposes hardware and OS metrics (CPU, memory, disk I/O, network, etc.) via an HTTP endpoint.
+*   **Prometheus Server:** The central component that scrapes (pulls) metrics from configured targets (Node Exporters) at regular intervals. It stores these metrics in its time-series database.
+*   **Grafana:** A powerful open-source platform for data visualization and analytics. It connects to Prometheus as a data source and allows you to create interactive dashboards to display your server metrics.
+
+```
++-------------------+       +-------------------+       +-------------------+
+|  Target Server 1  |       |  Target Server 2  |       |  Target Server N  |
+|                   |       |                   |       |                   |
+| +---------------+ |       | +---------------+ |       | +---------------+ |
+| | Node Exporter | | <-----| | Node Exporter | | <-----| | Node Exporter | |
+| +-------^-------+ |       | +-------^-------+ |       | +-------^-------+ |
++---------|---------+       +---------|---------+       +---------|---------+
+          |                           |                           |
+          | (HTTP/HTTPS - Scrape)     | (HTTP/HTTPS - Scrape)     | (HTTP/HTTPS - Scrape)
+          |                           |                           |
+          v                           v                           v
++-----------------------------------------------------------------------+
+|                           Prometheus Server                           |
+| (Scrapes metrics, stores in TSDB, provides PromQL query interface)    |
++-----------------------------------------------------------------------+
+          ^
+          | (HTTP/HTTPS - Query)
+          |
++-----------------------------------------------------------------------+
+|                                Grafana                                |
+| (Connects to Prometheus, visualizes data, creates dashboards)         |
++-----------------------------------------------------------------------+
+```
 
 ## Prerequisites
 
-Before you begin, ensure you have the following:
+*   **Linux Servers:** At least one server to act as the Prometheus/Grafana host, and one or more target servers to monitor.
+*   **SSH Access:** To all servers.
+*   **`sudo` privileges:** On all servers for installation.
+*   **Firewall Rules:** Ensure necessary ports are open (e.g., 9100 for Node Exporter, 9090 for Prometheus, 3000 for Grafana).
 
-*   **Node.js Application:** Your existing Node.js application files (`server.js`, `package.json`).
-*   **Ansible:** Installed on your CI server or a dedicated control node.
-*   **SSH Access:** The Ansible control node must have SSH access (key-based authentication is highly recommended) to your target deployment servers.
-*   **Target Deployment Servers:** Linux servers where Node.js and `npm` are installed (or Ansible can install them).
-*   **CI Server (Optional):** Configured to pull your Git repository and execute shell commands.
+## Step-by-Step Configuration
 
-## Project Files
+### Step 1: Set up Prometheus Server
 
-### `hosts.ini`
-
-This file defines the inventory of your target deployment servers. Replace the placeholders with your actual server details.
-
-```ini
-[webservers]
-your_deployment_server_ip ansible_user=your_ssh_user ansible_ssh_private_key_file=/path/to/your/ssh/key
-# Add more servers if you have them:
-# another_server_ip ansible_user=another_ssh_user ansible_ssh_private_key_file=/path/to/your/ssh/key
-```
-
-### `deploy_app.yml`
-
-This is the main Ansible playbook responsible for deploying the Node.js application. It performs the following tasks:
-
-*   Ensures Node.js and npm are installed.
-*   Installs `pm2` (a Node.js process manager) globally.
-*   Creates the application deployment directory.
-*   Clones or updates the application repository from GitHub.
-*   Installs Node.js dependencies on the target server.
-*   Starts or restarts the Node.js application using `pm2`.
-*   Configures `pm2` to start the application on server boot.
-
-```yaml
----
-- name: Deploy Node.js Application
-  hosts: webservers
-  become: yes # Run tasks with sudo privileges
-  vars:
-    app_name: nodejs-app
-    app_path: /opt/{{ app_name }}
-    app_port: 3000
-    git_repo_url: "https://github.com/nkefor/my-jenkins-pipeline-app.git" # Your GitHub repo URL
-    git_branch: main
-
-  tasks:
-    - name: Ensure Node.js and npm are installed (Ubuntu/Debian)
-      ansible.builtin.apt:
-        name:
-          - nodejs
-          - npm
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "Debian"
-
-    - name: Ensure Node.js and npm are installed (CentOS/RHEL)
-      ansible.builtin.yum:
-        name:
-          - nodejs
-          - npm
-        state: present
-        update_cache: yes
-      when: ansible_os_family == "RedHat"
-
-    - name: Install pm2 globally (process manager)
-      ansible.builtin.npm:
-        name: pm2
-        global: yes
-        state: present
-
-    - name: Create application directory
-      ansible.builtin.file:
-        path: "{{ app_path }}"
-        state: directory
-        mode: '0755'
-
-    - name: Clone or update application repository
-      ansible.builtin.git:
-        repo: "{{ git_repo_url }}"
-        dest: "{{ app_path }}"
-        version: "{{ git_branch }}"
-        force: yes # Force update to latest commit
-
-    - name: Install Node.js dependencies
-      ansible.builtin.npm:
-        path: "{{ app_path }}"
-        production: yes # Install only production dependencies
-
-    - name: Start/Restart Node.js application with pm2
-      ansible.builtin.command: pm2 restart {{ app_name }} || pm2 start {{ app_path }}/server.js --name {{ app_name }} -- -p {{ app_port }}
-      args:
-        chdir: "{{ app_path }}"
-      changed_when: true # Always report as changed to ensure pm2 command runs
-
-    - name: Save pm2 process list
-      ansible.builtin.command: pm2 save
-      changed_when: true
-
-    - name: Ensure pm2 starts on boot
-      ansible.builtin.command: pm2 startup systemd
-      changed_when: true
-      # This command generates a systemd unit file. You might need to run it once manually
-      # on the target server if it fails due to permissions or environment issues.
-```
-
-## CI/CD Workflow
-
-1.  **Code Commit:** Developer pushes code changes to the GitHub repository.
-2.  **CI Server Trigger:** The CI server (e.g., Jenkins) detects the new commit and triggers a build.
-3.  **Build & Test:** The CI server pulls the code, installs Node.js dependencies, and runs tests.
-4.  **Ansible Deployment:** Upon successful CI, the CI server executes the `ansible-playbook` command, pointing to `hosts.ini` and `deploy_app.yml`.
-5.  **Application Deployment:** Ansible connects to the target servers, performs the deployment tasks (cloning repo, installing dependencies, starting app), and ensures the application is running.
-
-## How to Use (Manual Test)
-
-To test the Ansible playbook manually (without a CI server):
-
-1.  **Ensure Ansible is installed** on your local machine or a dedicated control node.
-2.  **Update `hosts.ini`:** Replace `your_deployment_server_ip`, `your_ssh_user`, and `/path/to/your/ssh/key` with your actual server details and the path to your SSH private key.
-3.  **Run the playbook:**
+1.  **Choose a server** to host Prometheus and Grafana (your "Monitoring Server").
+2.  **Download Prometheus:**
     ```bash
-    ansible-playbook -i hosts.ini deploy_app.yml
+    # On your Monitoring Server
+    wget https://github.com/prometheus/prometheus/releases/download/v2.53.0/prometheus-2.53.0.linux-amd64.tar.gz
+    tar xvfz prometheus-2.53.0.linux-amd64.tar.gz
+    cd prometheus-2.53.0.linux-amd64
     ```
-    This will connect to your specified server, install Node.js/npm/pm2 (if not present), pull your application code, install its dependencies, and start/restart it using pm2.
+3.  **Create `prometheus.yml` configuration:** This file tells Prometheus what to monitor. Replace `your_target_server_ip_1`, `your_target_server_ip_2`, etc., with the actual IP addresses or hostnames of the servers you want to monitor.
 
-## Integration with CI Server (e.g., Jenkins)
+    ```yaml
+    # my global config
+    global:
+      scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is 1m.
+      evaluation_interval: 15s # Evaluate rules every 15 seconds. Default is 1m.
 
-To integrate this with a CI server, you would typically add a stage in your CI pipeline (e.g., `Jenkinsfile`) to execute the Ansible playbook after successful build and test stages. An example `Jenkinsfile` snippet is provided below:
+    scrape_configs:
+      - job_name: "prometheus"
+        static_configs:
+          - targets: ["localhost:9090"]
 
-```groovy
-pipeline {
-    agent any
+      - job_name: "node_exporter"
+        static_configs:
+          - targets:
+              - "your_target_server_ip_1:9100" # Replace with your first target server's IP/hostname
+              - "your_target_server_ip_2:9100" # Replace with your second target server's IP/hostname
+              # Add more target servers as needed
+    ```
+4.  **Start Prometheus:**
+    ```bash
+    # On your Monitoring Server, from the prometheus-2.53.0.linux-amd64 directory
+    ./prometheus --config.file=prometheus.yml &
+    ```
+    (For production, use `systemd`.)
+5.  **Verify Prometheus:** Open your browser and go to `http://<Monitoring_Server_IP>:9090`. Go to "Status" -> "Targets" to see if your Node Exporters are listed.
 
-    environment {
-        // Define your deployment server details here or use Jenkins credentials
-        DEPLOY_SERVER_IP = "your_deployment_server_ip"
-        SSH_USER = "your_ssh_user"
-        SSH_KEY_PATH = "/path/to/your/ssh/key.pem" // Path on the Jenkins server
-    }
+### Step 2: Install Node Exporter on Target Servers
 
-    stages {
-        stage('Checkout') { /* ... */ }
-        stage('Install Dependencies (CI Server)') { /* ... */ }
-        stage('Run Tests') { /* ... */ }
+Repeat these steps on *each* server you want to monitor.
 
-        stage('Deploy with Ansible') {
-            steps {
-                echo 'Deploying application using Ansible...'
-                // Ensure Ansible is installed on the Jenkins agent
-                // and the SSH key is accessible.
+1.  **Download Node Exporter:**
+    ```bash
+    # On each Target Server
+    wget https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz
+    tar xvfz node_exporter-1.8.1.linux-amd64.tar.gz
+    cd node_exporter-1.8.1.linux-amd64
+    ```
+2.  **Start Node Exporter:**
+    ```bash
+    # On each Target Server
+    ./node_exporter &
+    ```
+    (For production, use `systemd`.)
+3.  **Verify Node Exporter:** Open your browser and go to `http://<Target_Server_IP>:9100/metrics`. You should see a page full of metrics.
+4.  **Check Prometheus Targets:** Go back to your Prometheus UI (`http://<Monitoring_Server_IP>:9090/targets`). Your Node Exporter targets should now show as "UP".
 
-                // Create a temporary hosts.ini file for Ansible
-                sh """
-                    echo "[webservers]" > hosts.ini
-                    echo "${DEPLOY_SERVER_IP} ansible_user=${SSH_USER} ansible_ssh_private_key_file=${SSH_KEY_PATH}" >> hosts.ini
-                """
+### Step 3: Set up Grafana
 
-                // Run the Ansible playbook
-                sh "ansible-playbook -i hosts.ini deploy_app.yml"
-            }
-        }
-    }
+1.  **Install Grafana:** (On your Monitoring Server, alongside Prometheus)
+    *   **Debian/Ubuntu:**
+        ```bash
+        sudo apt-get install -y apt-transport-https software-properties-common wget
+        sudo mkdir -p /etc/apt/keyrings/
+        wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
+        echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+        sudo apt-get update
+        sudo apt-get install grafana
+        ```
+    *   **CentOS/RHEL:**
+        ```bash
+        sudo yum install -y grafana
+        ```
+2.  **Start Grafana:**
+    ```bash
+    sudo systemctl daemon-reload
+    sudo systemctl start grafana-server
+    sudo systemctl enable grafana-server
+    ```
+3.  **Verify Grafana:** Open your browser and go to `http://<Monitoring_Server_IP>:3000`. Default login: `admin` / `admin`.
 
-    post { /* ... */ }
-}
-```
+### Step 4: Configure Grafana Data Source
+
+1.  **Log in to Grafana.**
+2.  Click the **gear icon** (Configuration) on the left sidebar -> **Data sources**.
+3.  Click **"Add data source"**.
+4.  Select **"Prometheus"**.
+5.  **HTTP -> URL:** Enter `http://localhost:9090` (since Prometheus is on the same server).
+6.  Click **"Save & test"**. You should see "Data source is working".
+
+### Step 5: Import a Grafana Dashboard
+
+1.  Click the **"+" icon** (Create) on the left sidebar -> **Import**.
+2.  **Import via grafana.com:** Enter `1860` (Node Exporter Full dashboard ID).
+3.  Click **"Load"**.
+4.  Select your Prometheus data source.
+5.  Click **"Import"**.
+
+You should now see a comprehensive dashboard displaying metrics from all your monitored servers!
+
+## Scaling and Advanced Features
+
+*   **Alerting:** Use Prometheus Alertmanager for notifications (email, Slack, PagerDuty).
+*   **Service Discovery:** For dynamic environments, Prometheus can automatically discover targets (EC2, Kubernetes, etc.).
+*   **Custom Metrics:** Expose application-specific metrics using Prometheus client libraries.
+*   **High Availability:** Run multiple Prometheus instances or use solutions like Thanos/Cortex.
+*   **Recording Rules:** Pre-aggregate metrics for faster query performance.
 
 ## Contributing
 
