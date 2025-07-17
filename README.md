@@ -18,6 +18,7 @@ This document outlines approaches for developing a comprehensive monitoring syst
   - [How it Tracks Server Health & Uptime](#how-it-tracks-server-health--uptime-2)
   - [General Setup Steps](#general-setup-steps-2)
 - [Choosing a Platform](#choosing-a-platform)
+- [Diagrams](#diagrams)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -131,6 +132,42 @@ The Elastic Stack is a powerful open-source suite for search, log analysis, and 
 *   **Confusion:** Multiple sources of truth for the same data can lead to inconsistencies.
 
 Instead, choose the platform that best fits your organization's needs, budget, and existing infrastructure.
+
+## Diagrams
+
+To enhance the understanding of the monitoring system architectures, it is highly recommended to include diagrams for each approach (Splunk, Datadog, Elastic Stack).
+
+### How to Create and Embed Diagrams
+
+1.  **Choose a Diagramming Tool:**
+    *   **Lucidchart, draw.io (diagrams.net), Miro:** Online tools with extensive shape libraries for cloud architecture, networking, and general flowcharts.
+    *   **Excalidraw:** For hand-drawn style diagrams.
+    *   **PlantUML, Mermaid:** Text-based diagramming tools that allow you to define diagrams using code, which can be version-controlled alongside your documentation.
+
+2.  **Design the Diagrams:**
+    *   **For each platform (Splunk, Datadog, Elastic Stack):** Create a high-level architectural diagram showing the flow of data from target servers to the central monitoring components and then to the visualization layer.
+    *   **Key elements to include:**
+        *   Target Servers (with agents like Universal Forwarder, Datadog Agent, Beats)
+        *   Data Ingestion/Processing (Indexers, Datadog SaaS, Logstash/Elasticsearch)
+        *   Data Storage (Splunk Indexers, Datadog SaaS, Elasticsearch)
+        *   Visualization/Analysis (Splunk Search Head, Datadog UI, Kibana)
+        *   Data flow arrows.
+        *   Optional: Cloud provider components if applicable (e.g., EC2 instances, VPCs).
+
+3.  **Export and Embed:**
+    *   Export your diagrams as high-resolution images (e.g., PNG, SVG).
+    *   Save the images in a dedicated `docs/images/` or `images/` directory within your repository.
+    *   Embed the images in the `README.md` using Markdown syntax:
+        ```markdown
+        ![Splunk Architecture Diagram](images/splunk_architecture.png)
+        ```
+    *   **For PlantUML/Mermaid:** You can embed the code directly in Markdown if your GitHub/GitLab instance supports rendering them, or generate images and embed those.
+
+### Suggested Diagram Locations within this README
+
+*   **Under `## Approach with Splunk`:** Add a diagram illustrating the Universal Forwarder -> Indexer -> Search Head flow.
+*   **Under `## Approach with Datadog`:** Add a diagram showing the Datadog Agent -> Datadog SaaS flow.
+*   **Under `## Approach with Elastic Stack (ELK Stack)`:** Add a diagram depicting the Beats -> (Logstash) -> Elasticsearch -> Kibana flow.
 
 ## Contributing
 
