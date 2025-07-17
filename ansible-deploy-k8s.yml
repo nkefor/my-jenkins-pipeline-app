@@ -1,0 +1,41 @@
+---
+- name: Deploy to Kubernetes
+  hosts: localhost # Ansible runs on Jenkins, targeting the K8s cluster
+  connection: local
+  gather_facts: no
+
+  vars:
+    kubeconfig_path: "~/.kube/config" # Path to your kubeconfig file on Jenkins agent
+    k8s_manifest_path: "{{ lookup('env', 'WORKSPACE') }}/k8s-deployment.yml" # Path to the K8s manifest in Jenkins workspace
+
+  tasks:
+    - name: Ensure kubectl is configured
+      ansible.builtin.command: kubectl config view
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      changed_when: false
+
+    - name: Apply Kubernetes deployment and service
+      ansible.builtin.command: kubectl apply -f {{ k8s_manifest_path }}
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: k8s_apply_result
+      changed_when: k8s_apply_result.rc == 0
+
+    - name: Display kubectl apply result
+      ansible.builtin.debug:
+        var: k8s_apply_result.stdout_lines
+
+    - name: Wait for deployment to be ready
+      ansible.builtin.command: kubectl rollout status deployment/train-schedule-app
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
+      register: rollout_status
+      until: rollout_status.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+
+    - name: Display rollout status
+      ansible.builtin.debug:
+        var: rollout_status.stdout_lines

@@ -1,34 +1,39 @@
-# Fully Automated CI/CD Pipeline with Terraform, Jenkins, Docker, Helm & Kubernetes
+# CI/CD Pipeline: Train Schedule Application
 
-This guide outlines the design and implementation of a robust, fully automated Continuous Integration/Continuous Delivery (CI/CD) pipeline. It integrates leading DevOps tools to manage the entire software delivery lifecycle, from infrastructure provisioning to application deployment, ensuring speed, reliability, and scalability.
+This project outlines a comprehensive CI/CD pipeline for a Python-based train schedule application, integrating leading DevOps tools to automate the entire software delivery process, from code commit to deployment on Kubernetes, with integrated monitoring and alerting using Splunk.
 
 ## Table of Contents
 
-- [Introduction](#introduction)
+- [Overview](#overview)
 - [Architecture Overview](#architecture-overview)
 - [Key Components and Tools](#key-components-and-tools)
-- [Step-by-Step CI/CD Workflow](#step-by-step-ci/cd-workflow)
-- [Best Practices for this Pipeline](#best-practices-for-this-pipeline)
+- [Project Files](#project-files)
+  - [Python Application Files](#python-application-files)
+  - [Kubernetes Manifests](#kubernetes-manifests)
+  - [Ansible Playbook](#ansible-playbook)
+  - [Jenkinsfile](#jenkinsfile)
+- [Setup and Configuration Steps](#setup-and-configuration-steps)
+- [Monitoring and Alerting with Splunk](#monitoring-and-alerting-with-splunk)
 - [Contributing](#contributing)
 - [License](#license)
 
-## Introduction
+## Overview
 
 This pipeline automates the process of:
 
-*   **Infrastructure Provisioning:** Setting up the underlying Kubernetes cluster using Terraform.
-*   **Application Building & Testing:** Using Jenkins to build application code, run tests, and containerize applications with Docker.
-*   **Application Packaging & Deployment:** Leveraging Helm for Kubernetes-native application packaging and Jenkins for deploying to Kubernetes.
-
-This end-to-end automation minimizes manual intervention, reduces errors, and accelerates the delivery of new features and updates.
+*   **Application Development:** A simple Python Flask application.
+*   **Containerization:** Packaging the application into Docker images.
+*   **Continuous Integration:** Building, testing, and pushing Docker images using Jenkins.
+*   **Continuous Deployment:** Deploying the application to a Kubernetes cluster using Ansible.
+*   **Monitoring & Alerting:** Centralized logging and operational intelligence with Splunk.
 
 ## Architecture Overview
 
 ```
 +---------------------+     +-------------------+     +-------------------+
-| Application Code    |     | CI Pipeline       |     | Container Registry|
-| Repository          |     | (Build, Test,     |     | (Docker Images)   |
-| (e.g., GitHub)      |     | Push Image)       |     |                   |
+| Python Application  |     | Jenkins CI/CD     |     | Container Registry|
+| Code Repository     |     | (Orchestrator)    |     | (Docker Images)   |
+| (e.g., GitHub)      |     |                   |     |                   |
 +----------+----------+     +---------+---------+     +---------+---------+
            |                          |                           ^
            | (Code Push)              | (Image Push)              |
@@ -41,109 +46,97 @@ This end-to-end automation minimizes manual intervention, reduces errors, and ac
            v                          |                           |
 +-----------------------------------------------------------------------+
 |                                                                       |
-|  Jenkins (CI/CD Orchestrator)                                         |
-|  - Stage 1: Infrastructure Provisioning (Terraform)                   |
-|  - Stage 2: Application Build & Test (Docker)                         |
-|  - Stage 3: Application Deployment (Helm, Kubernetes)                 |
+|  Jenkins Pipeline (Jenkinsfile)                                       |
+|  - Stage 1: Build (Docker Image)                                      |
+|  - Stage 2: Test (Python Unit Tests)                                  |
+|  - Stage 3: Push (Docker Image to Registry)                           |
+|  - Stage 4: Deploy (Ansible to Kubernetes)                            |
 |                                                                       |
 +-----------------------------------------------------------------------+
            |
-           | (Terraform Apply)
-           | (kubectl apply)
-           | (helm install/upgrade)
+           | (Ansible Playbook Execution)
            v
 +---------------------+
 | Kubernetes Cluster  |
-| (Provisioned by     |
-| Terraform)          |
+| (Runs Containerized |
+| Application)        |
 +---------------------+
            |
-           | (Runs Containerized Apps)
+           | (Logs/Metrics)
            v
 +---------------------+
-| Application         |
-| (Deployed by Helm)  |
+| Splunk              |
+| (Monitoring &       |
+| Alerting)           |
 +---------------------+
 ```
 
 ## Key Components and Tools
 
-*   **Terraform:**
-    *   **Role:** Infrastructure as Code (IaC) tool for provisioning and managing the Kubernetes cluster itself (e.g., EKS, GKE, AKS, or self-managed K8s on VMs).
-    *   **Benefits:** Automates cluster setup, ensures consistency, enables version control of infrastructure.
-*   **Jenkins:**
-    *   **Role:** The central CI/CD orchestration server. It pulls code, triggers builds, runs tests, executes Docker commands, and manages Helm deployments.
-    *   **Benefits:** Highly extensible, robust, and widely adopted for complex pipelines.
-*   **Docker:**
-    *   **Role:** Containerization platform. Applications are packaged into Docker images, ensuring consistency across environments.
-    *   **Benefits:** Portability, isolation, efficient resource utilization.
-*   **Helm:**
-    *   **Role:** The package manager for Kubernetes. Applications are defined as Helm charts, which bundle all necessary Kubernetes resources (Deployments, Services, ConfigMaps, etc.).
-    *   **Benefits:** Simplifies Kubernetes application deployment, versioning, and management.
-*   **Kubernetes:**
-    *   **Role:** The container orchestration platform where the applications run. It manages the lifecycle of containers, scaling, networking, and storage.
-    *   **Benefits:** Scalability, resilience, self-healing, efficient resource management.
-*   **Container Registry:** (e.g., Docker Hub, ECR, GCR, Quay.io)
-    *   **Role:** Stores the Docker images built by Jenkins.
+*   **Python Application:** A simple Flask application simulating a train schedule service.
+*   **Docker:** Containerizes the Python application for consistent deployment.
+*   **Jenkins:** The central CI/CD orchestrator. It defines the pipeline stages, automates builds, tests, image pushes, and triggers Ansible for deployment.
+*   **Ansible:** Used for declarative deployment to Kubernetes. It applies Kubernetes manifests to the cluster.
+*   **Kubernetes:** The container orchestration platform where the application will run.
+*   **Splunk:** For centralized log management, monitoring, and alerting on application and infrastructure health.
+*   **Container Registry:** (e.g., Docker Hub, ECR, GCR) to store Docker images.
 
-## Step-by-Step CI/CD Workflow
+## Project Files
 
-1.  **Code Commit (Application Repository):**
-    *   A developer pushes application code changes to a Git repository (e.g., GitHub, GitLab).
+### Python Application Files
 
-2.  **Jenkins CI Trigger:**
-    *   Jenkins is configured to monitor the application repository. A webhook or polling mechanism triggers a new build upon code commit.
+*   **`app.py`**: A simple Flask application that provides a train schedule API.
+*   **`requirements.txt`**: Lists Python dependencies (`Flask`).
+*   **`Dockerfile`**: Defines how to build the Docker image for the Python application.
 
-3.  **Jenkins Pipeline Execution:**
+### Kubernetes Manifests
 
-    *   **Stage 1: Infrastructure Provisioning (Terraform)**
-        *   **Purpose:** Ensure the Kubernetes cluster is provisioned or updated to the desired state.
-        *   **Tasks:**
-            *   Jenkins checks out the Terraform code from a separate `infrastructure-repo`.
-            *   `terraform init`: Initializes the Terraform working directory.
-            *   `terraform plan`: Generates an execution plan (can be reviewed manually or automatically).
-            *   `terraform apply -auto-approve`: Applies the changes to provision or update the Kubernetes cluster.
-        *   **Output:** A ready-to-use Kubernetes cluster.
+*   **`k8s-deployment.yml`**: Kubernetes Deployment and Service definitions for the train schedule application. The image tag will be dynamically replaced by Jenkins.
 
-    *   **Stage 2: Application Build & Test (Docker)**
-        *   **Purpose:** Build the application, run tests, and containerize it.
-        *   **Tasks:**
-            *   Jenkins checks out the application code from the `application-repo`.
-            *   `npm install`, `mvn clean install`, etc.: Install application dependencies.
-            *   `npm test`, `pytest`, `mvn test`: Run unit and integration tests.
-            *   `docker build -t my-app:$(BUILD_NUMBER) .`: Build the Docker image of the application.
-            *   `docker push my-app:$(BUILD_NUMBER)`: Push the Docker image to the Container Registry.
-        *   **Output:** A tested Docker image available in the registry.
+### Ansible Playbook
 
-    *   **Stage 3: Application Deployment (Helm, Kubernetes)**
-        *   **Purpose:** Deploy the new version of the application to the Kubernetes cluster.
-        *   **Tasks:**
-            *   Jenkins checks out the Helm chart for the application (can be in the `application-repo` or a separate `helm-charts-repo`).
-            *   `helm upgrade --install my-app ./my-app-chart --namespace my-app-ns --set image.tag=$(BUILD_NUMBER)`:
-                *   `upgrade --install`: Installs the chart if it doesn't exist, or upgrades it if it does.
-                *   `my-app`: Release name for the Helm deployment.
-                *   `./my-app-chart`: Path to the Helm chart.
-                *   `--namespace my-app-ns`: Deploys to a specific Kubernetes namespace.
-                *   `--set image.tag=$(BUILD_NUMBER)`: Overrides the image tag in the Helm chart's `values.yaml` to use the newly built Docker image.
-            *   (Optional) Run post-deployment smoke tests or health checks on the deployed application.
+*   **`ansible-deploy-k8s.yml`**: An Ansible playbook executed by Jenkins to apply the Kubernetes manifests to the cluster using `kubectl`.
 
-5.  **Monitoring & Feedback:**
-    *   Jenkins provides real-time feedback on pipeline status.
-    *   Monitoring tools (e.g., Prometheus, Grafana) track application and infrastructure performance in Kubernetes.
-    *   Alerts notify teams of deployment failures or application issues.
+### Jenkinsfile
 
-## Best Practices for this Pipeline
+*   **`Jenkinsfile`**: Defines the CI/CD pipeline stages in Groovy syntax, orchestrating the entire workflow.
 
-*   **Separate Repositories:** Maintain separate Git repositories for application code, infrastructure code (Terraform), and Helm charts (if not co-located with application code).
-*   **Idempotence:** Ensure all Terraform, Docker, and Helm operations are idempotent.
-*   **Secrets Management:** Never hardcode secrets. Use Jenkins Credentials, environment variables, or dedicated secrets management tools (e.g., HashiCorp Vault, Kubernetes Secrets with Sealed Secrets) integrated with your pipeline.
-*   **Environment Management:** Use different Terraform workspaces, Jenkins pipeline parameters, or Helm values files to manage deployments across different environments (dev, staging, production).
-*   **Rollback Strategy:** Design clear rollback procedures. For Helm, `helm rollback` is powerful. For Terraform, `terraform destroy` or reverting to a previous state file.
-*   **Testing at Each Stage:** Implement automated tests (unit, integration, end-to-end) at appropriate stages of the pipeline.
-*   **Security Scanning:** Integrate security scans (SAST, SCA, container image scanning) into the Jenkins pipeline before deployment.
-*   **Resource Management in Kubernetes:** Define `requests` and `limits` for CPU and memory in your Kubernetes deployments (via Helm charts) to ensure stable performance and efficient resource utilization.
-*   **Observability:** Implement comprehensive logging, metrics, and tracing for your applications and infrastructure.
-*   **Pipeline as Code:** Define your Jenkins pipeline using `Jenkinsfile` (Groovy script) stored in your Git repository for version control and collaboration.
+## Setup and Configuration Steps
+
+1.  **Prerequisites:**
+    *   **Kubernetes Cluster:** A running Kubernetes cluster.
+    *   **Jenkins Server:** A running Jenkins instance with Docker, Python, and Ansible installed on the agent that will run this pipeline.
+    *   **`kubectl`:** Configured on the Jenkins agent with access to your Kubernetes cluster. The `kubeconfig` file should be placed at the path specified in `Jenkinsfile` (`/var/jenkins_home/.kube/config` or similar).
+    *   **Container Registry Account:** (e.g., Docker Hub).
+    *   **Splunk Instance:** A running Splunk instance with HTTP Event Collector (HEC) enabled if you plan to use the Splunk logging.
+
+2.  **Update Placeholders:**
+    *   **`Jenkinsfile`:**
+        *   `DOCKER_REGISTRY`: Replace `"your-docker-registry"` with your actual Docker registry (e.g., `"docker.io/your-username"`).
+        *   `KUBECONFIG_PATH`: Ensure this path is correct for your Jenkins agent.
+        *   **Splunk HEC (in `post` section):** Uncomment and replace `your-splunk-hec-endpoint` and `<token>` with your Splunk HEC details if you want to send deployment logs to Splunk.
+    *   **`k8s-deployment.yml`:** The `image` placeholder will be replaced by Jenkins during the deployment stage.
+
+3.  **Jenkins Credentials (if using private registry):**
+    *   If your Docker registry is private, you'll need to configure Jenkins credentials (Type: "Username with password") with your Docker registry username and password. Update the `credentialsId` in the `Jenkinsfile`'s "Push Docker Image" stage.
+
+4.  **Jenkins Job Configuration:**
+    *   Create a new Jenkins Pipeline job.
+    *   Configure it to pull from your Git repository (where these files will be pushed).
+    *   Set the "Definition" to "Pipeline script from SCM" and point to the `Jenkinsfile`.
+
+## Monitoring and Alerting with Splunk
+
+*   **Log Collection:**
+    *   Configure your Kubernetes cluster to send container logs to Splunk. This can be done using a Splunk Universal Forwarder deployed as a DaemonSet in Kubernetes, or by using a logging agent like Fluentd/Fluent Bit that forwards logs to Splunk HEC.
+*   **Metrics Collection:**
+    *   Use Splunk Connect for Kubernetes or a Universal Forwarder to collect Kubernetes metrics (e.g., from cAdvisor, Kube-state-metrics) and send them to Splunk.
+*   **Alerting:**
+    *   In Splunk, create searches and alerts based on:
+        *   **Application Logs:** Errors, exceptions, specific messages from your Python app.
+        *   **Kubernetes Events:** Pod crashes, deployment failures, OOMKills.
+        *   **Performance Metrics:** High CPU/memory usage, low disk space on nodes.
+        *   **Deployment Status:** Use the HEC events sent by Jenkins (as commented in `Jenkinsfile`) to alert on successful or failed deployments.
 
 ## Contributing
 
