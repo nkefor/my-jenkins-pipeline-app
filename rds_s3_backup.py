@@ -216,9 +216,7 @@ def export_snapshot_to_s3(rds_client, snapshot_identifier, s3_bucket_name, iam_r
         sys.exit(1)
 
 def wait_for_export_completion(rds_client, export_task_identifier, timeout_minutes=180, poll_interval_seconds=60):
-    """
-    Waits for an S3 export task to complete.
-    """
+    """ Waits for an S3 export task to complete. """
     logging.info(f"Waiting for export task '{export_task_identifier}' to complete...")
     start_time = time.time()
     while True:
