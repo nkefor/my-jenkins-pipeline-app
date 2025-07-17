@@ -1,0 +1,19 @@
+
+# my global config
+global:
+  scrape_interval: 15s # Set the scrape interval to every 15 seconds. Default is 1m.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. Default is 1m.
+  # scrape_timeout is set to the global default (10s).
+
+# A scrape configuration scraping Prometheus itself
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "node_exporter"
+    static_configs:
+      - targets:
+          - "your_target_server_ip_1:9100" # Replace with your first target server's IP/hostname
+          - "your_target_server_ip_2:9100" # Replace with your second target server's IP/hostname
+          # Add more target servers as needed
